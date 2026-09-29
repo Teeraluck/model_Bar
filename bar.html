@@ -8,6 +8,18 @@
             margin: 0;
             overflow: hidden;
         }
+        #resetCameraButton {
+            position: fixed;
+            top: 16px;
+            right: 16px;
+            z-index: 1;
+            padding: 10px 14px;
+            border: 0;
+            border-radius: 6px;
+            background: #ffffff;
+            color: #222222;
+            cursor: pointer;
+        }
     </style>
 </head>
 
@@ -18,8 +30,19 @@
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/EXRLoader.js"></script>
+    <button id="resetCameraButton" type="button">รีเซ็ตมุมกล้อง</button>
 
     <script>
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x000000);
+
+        const camera = new THREE.PerspectiveCamera(
+            75,
+            window.innerWidth / window.innerHeight,
+            0.1,
+            1000
+        );
+        camera.position.set(0, 0, 2.5);
 
         const renderer = new THREE.WebGLRenderer();
         renderer.setSize(window.innerWidth, window.innerHeight);
@@ -27,60 +50,337 @@
         renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         document.body.appendChild(renderer.domElement);
 
-        const scene = new THREE.Scene();
+        // ค่าที่ส่งจาก JavaScript เข้า shader
+        const uniforms = {
+            uTime: { value: 0.0 },
+            uLightDir: { value: new THREE.Vector3(0.4, 1.0, 0.8).normalize() },
+            uTexture: { value: new THREE.TextureLoader().load('https://cdn.discordapp.com/attachments/1554153477129633872/1554153502887124992/003.jpg?ex=6abc827d&is=6abb30fd&hm=7921fe9d2b09071941f5cc00f80e732331d1b44aff9b56de7062657387f9d806&') },
+            uTexture2: { value: new THREE.TextureLoader().load('https://media.discordapp.net/attachments/1554153477129633872/1554504680208466000/Screenshot_158.png?ex=6abd20cd&is=6abbcf4d&hm=8c63ee70eb0ca9681a12d0639cf1fc0fa9182423df4a3d7027221f5cb4a5422c&=&format=webp&quality=lossless') },
+            uTexture3: { value: new THREE.TextureLoader().load('https://cdn.discordapp.com/attachments/1554153477129633872/1554510867134021712/Screenshot_159.png?ex=6abd2690&is=6abbd510&hm=42c83362f79176ad00bfe065583ff5e24cc4cb7e97afef5b75022d372db32376&') }
+        };
 
-        
-        const camera = new THREE.PerspectiveCamera(
-            75,
-            window.innerWidth / window.innerHeight,
-            0.1,
-            1000
-        );
+        const vertexShader = `
+    uniform float uTime;
+
+    varying vec2 vUv;
+    varying vec3 vNormal;
+
+    void main() {
+      vUv = uv;
+      vNormal = normal;
+
+      vec3 pos = position;
+
+      gl_Position = projectionMatrix * viewMatrix * modelMatrix * vec4(pos, 1.0);
+    }
+  `;
+
+        const fragmentShader = `
+    precision mediump float;
+
+    uniform float uTime;
+    uniform sampler2D uTexture;
+    varying vec2 vUv;
+    varying vec3 vNormal;
+    uniform vec3 uLightDir;
+
+
+    void main() {
+      // เริ่มเขียน fragment shader ที่นี่
+      //vec3 color = vec3(vUv, 0.5);
+
+      //vec3 color = vec3(0.7, 0.9, 1.0);
+      vec3 color = texture2D(uTexture, vUv).rgb;
+
+      vec3 N = normalize(vNormal);
+      vec3 L = normalize(uLightDir);
+      float diffuse = max(dot(N,L), 0.0);
+
+      //ambient
+      float ambient = 0.15;
+      
+      //toon Shading
+      float level = 3.0;
+      //diffuse = floor((diffuse + ambient) * level  ) / level;
+      diffuse = smoothstep(0.15, 0.2, diffuse);
+
+      color = color * (diffuse + ambient);
+
+      gl_FragColor = vec4(color, 1.0);
+    }
+  `;
+        const outlineVertexShader = `
+    uniform float uTime;
+
+    varying vec2 vUv;
+    varying vec3 vNormal;
+
+    void main() {
+      vUv = uv;
+      vNormal = normal;
+      vec3 pos = position;
+
+      //scale up for outline
+      pos += normal * 0.03;
+
+      gl_Position = projectionMatrix * viewMatrix * modelMatrix * vec4(pos, 1.0);
+    }
+  `;
+
+        const outlinefragmentShader = `
+    precision mediump float;
+
+    uniform float uTime;
+    uniform sampler2D uTexture;
+    varying vec2 vUv;
+    varying vec3 vNormal;
+    uniform vec3 uLightDir;
+
+    void main() {
+
+      gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+    }
+  `;
+        const geometry = new THREE.PlaneBufferGeometry(5.0, 6.0);
+        const material = new THREE.ShaderMaterial({
+            vertexShader,
+            fragmentShader,
+            uniforms,
+            side: THREE.DoubleSide
+        });
+        const uniforms2 = {
+            uTime: uniforms.uTime,
+            uLightDir: uniforms.uLightDir,
+            uTexture: uniforms.uTexture2
+        };
+        const material2 = new THREE.ShaderMaterial({
+            vertexShader,
+            fragmentShader,
+            uniforms: uniforms2,
+            side: THREE.DoubleSide
+        });
+        const uniforms3 = {
+            uTime: uniforms.uTime,
+            uLightDir: uniforms.uLightDir,
+            uTexture: uniforms.uTexture3
+        };
+        const material3 = new THREE.ShaderMaterial({
+            vertexShader,
+            fragmentShader,
+            uniforms: uniforms3,
+            side: THREE.DoubleSide
+        });
+        const outlineMaterial = new THREE.ShaderMaterial({
+            vertexShader: outlineVertexShader,
+            fragmentShader: outlinefragmentShader,
+            uniforms,
+            side: THREE.BackSide
+        });
+
+        const sphereVertexShader = `
+            uniform float uTime;
+            varying vec3 vNormal;
+
+            void main() {
+                vNormal = normal;
+                vec3 pos = position;
+                pos.z += sin(pos.x * 5.0 + uTime) * 0.1;
+                gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
+            }
+        `;
+        const sphereFragmentShader = `
+            precision mediump float;
+            varying vec3 vNormal;
+
+            void main() {
+                vec3 N = normalize(vNormal);
+                vec3 L = normalize(vec3(0.4, 1.0, 0.8));
+                float diffuse = max(dot(N, L), 0.0);
+                vec3 color = vec3(1.0, 0.0, 0.3) * (0.35 + diffuse);
+                gl_FragColor = vec4(color, 1.0);
+            }
+        `;
+        const sphereUniforms = { uTime: { value: 0.0 } };
+        const geometry2 = new THREE.SphereBufferGeometry(1.0, 32, 32);
+        const sphereMaterial = new THREE.ShaderMaterial({
+            vertexShader: sphereVertexShader,
+            fragmentShader: sphereFragmentShader,
+            uniforms: sphereUniforms
+        });
+        const mesh2 = new THREE.Mesh(geometry2, sphereMaterial);
+        mesh2.name = 'Sphere';
+        scene.add(mesh2);
+        mesh2.position.set(-11.1, 15.7, -14.65);
+        mesh2.scale.setScalar(0.7); // ใหญ่ขึ้น 2 เท่า
+
+        const mesh = new THREE.Mesh(geometry, material);
+        //scene.add(mesh);
+        mesh.position.set(1, 0, 0);
+
+        const outlineMesh = new THREE.Mesh(geometry, outlineMaterial);
+        //scene.add(outlineMesh);
+        outlineMesh.position.set(1, 0, 0);
+        outlineMesh.scale.multiplyScalar(1.05);
+
+        const pickables = [];
+        pickables.push(mesh2);
+        const raycaster = new THREE.Raycaster();
+        const pointer = new THREE.Vector2();
+        let picked_object = null;
+        let zoomStartTime = null;
+        const zoomStartPosition = new THREE.Vector3();
+        const zoomEndPosition = new THREE.Vector3();
+        const zoomStartTarget = new THREE.Vector3();
+        const zoomEndTarget = new THREE.Vector3();
+
+        renderer.domElement.addEventListener('click', onPick);
+        function onPick(e) {
+            const r = renderer.domElement.getBoundingClientRect();
+            const x = (e.clientX ?? e.touches[0].clientX) - r.left;
+            const y = (e.clientY ?? e.touches[0].clientY) - r.top;
+            pointer.x = (x / r.width) * 2 - 1;
+            pointer.y = -(y / r.height) * 2 + 1;
+
+            raycaster.setFromCamera(pointer, camera);
+            const hit = raycaster.intersectObjects(pickables, false)[0];
+            if (hit == null) {
+                picked_object = null;
+                return;
+            }
+            picked_object = hit.object;
+            zoomStartPosition.copy(camera.position);
+            zoomStartTarget.copy(controls.target);
+            zoomEndTarget.copy(hit.object.getWorldPosition(new THREE.Vector3()));
+            if (hit.object.name === 'Sphere') {
+                const cameraDirection = camera.position.clone()
+                    .sub(controls.target)
+                    .normalize();
+                zoomEndPosition.copy(zoomEndTarget).add(cameraDirection.multiplyScalar(4));
+            } else if (hit.object.name === 'Plane 2' || hit.object.name === 'Plane 3') {
+                const cameraDirection = new THREE.Vector3(0, 0, 1)
+                    .applyQuaternion(hit.object.getWorldQuaternion(new THREE.Quaternion()))
+                    .normalize();
+                if (cameraDirection.dot(camera.position.clone().sub(zoomEndTarget)) < 0) {
+                    cameraDirection.negate();
+                }
+                zoomEndPosition.copy(zoomEndTarget).add(cameraDirection.multiplyScalar(16));
+            } else {
+                zoomEndPosition.set(
+                    zoomEndTarget.x,
+                    zoomEndTarget.y,
+                    zoomEndTarget.z - 16
+                );
+            }
+            zoomStartTime = performance.now();
+            console.log('Picked object:', hit.object);
+        }
+
+        function addPickableObject(name, geometry, position, objectMaterial = material) {
+            const mesh = new THREE.Mesh(geometry, objectMaterial);
+            scene.add(mesh);
+            mesh.name = name;
+            mesh.position.copy(position);
+            pickables.push(mesh);
+
+            const outlineMesh = new THREE.Mesh(geometry, outlineMaterial);
+            scene.add(outlineMesh);
+            mesh.add(outlineMesh);
+
+            return mesh;
+        }
+
+        addPickableObject('Plane', geometry, new THREE.Vector3(-9, 17.5, 29.3));
+        const plane2 = addPickableObject('Plane 2', geometry, new THREE.Vector3(-28.3, 24, 14), material2);
+        plane2.scale.setScalar(1.2);
+        plane2.rotation.y = Math.PI / 2;
+        const plane3 = addPickableObject('Plane 3', geometry, new THREE.Vector3(-28.3, 24, -9), material3);
+        plane3.scale.setScalar(1.2);
+        plane3.rotation.y = Math.PI / 2;
+        function lerp(a, b, t) {
+            return a + (b - a) * t;
+        }
+        addEventListener('resize', () => {
+            camera.aspect = innerWidth / innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(innerWidth, innerHeight);
+            renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+        });
 
         //pointlight
-        const pointLight2 = new THREE.PointLight(0xffffff,2,50);
-        pointLight2.position.set(0,30,0);
-        pointLight2.castShadow = true;  
+        const pointLight2 = new THREE.PointLight(0xffffff, 0.5, 50);
+        pointLight2.position.set(0, 30, 0);
+        pointLight2.castShadow = true;
         pointLight2.shadow.bias = -0.002; // ปรับค่า bias เล็กน้อยเพื่อป้องกัน Self-shadowing
         pointLight2.shadow.mapSize.width = 2048; // เพิ่มความละเอียดของ Shadow Map
         pointLight2.shadow.mapSize.height = 2048;
         scene.add(pointLight2);
 
-        camera.position.set(40, 45, -40);
+        //Area Light
+        const areaLight = new THREE.RectAreaLight(0x7251B0, 3, 40, 10); // 2 ตัวเลขด้านหลังเป็น ขนาดของ สี่เหลี่ยม
+        areaLight.position.set(-11.5, 1, -4.5);
+        areaLight.lookAt(6, 1, -4.5);
+        scene.add(areaLight);
+
+        const areaLight2 = new THREE.RectAreaLight(0x7251B0, 25, 12, 10); // 2 ตัวเลขด้านหลังเป็น ขนาดของ สี่เหลี่ยม
+        areaLight2.position.set(-27, 20, -8.5);
+        areaLight2.lookAt(6, 1, -8.5);
+        scene.add(areaLight2);
+        
+        const areaLight3 = new THREE.RectAreaLight(0x7251B0, 25, 12, 10); // 2 ตัวเลขด้านหลังเป็น ขนาดของ สี่เหลี่ยม
+        areaLight3.position.set(-27, 20, 14.3);
+        areaLight3.lookAt(6, 1, 14.3);
+        scene.add(areaLight3);
+        
+        const areaLight4 = new THREE.RectAreaLight(0x7251B0, 15, 12, 10); // 2 ตัวเลขด้านหลังเป็น ขนาดของ สี่เหลี่ยม
+        areaLight4.position.set(-27, 23.5, 25);
+        areaLight4.lookAt(6, 1, 25);
+        scene.add(areaLight4);
+
+        const areaLight5 = new THREE.RectAreaLight(0x7251B0, 15, 12, 10); // 2 ตัวเลขด้านหลังเป็น ขนาดของ สี่เหลี่ยม
+        areaLight5.position.set(-27, 31, 25);
+        areaLight5.lookAt(6, 1, 25);
+        scene.add(areaLight5);
+
+        const areaLight6 = new THREE.RectAreaLight(0x7251B0, 15, 12, 10); // 2 ตัวเลขด้านหลังเป็น ขนาดของ สี่เหลี่ยม
+        areaLight6.position.set(-27, 23.5, 3);
+        areaLight6.lookAt(6, 1, 3);
+        scene.add(areaLight6);
+
+        const areaLight7 = new THREE.RectAreaLight(0x7251B0, 15, 12, 10); // 2 ตัวเลขด้านหลังเป็น ขนาดของ สี่เหลี่ยม
+        areaLight7.position.set(-27, 31, 3);
+        areaLight7.lookAt(6, 1, 3);
+        scene.add(areaLight7);
+
+        const areaLight8 = new THREE.RectAreaLight(0x7251B0, 15, 12, 10); // 2 ตัวเลขด้านหลังเป็น ขนาดของ สี่เหลี่ยม
+        areaLight8.position.set(-27, 23.5, -20.2);
+        areaLight8.lookAt(6, 1, -20.2);
+        scene.add(areaLight8);
+
+        const areaLight9 = new THREE.RectAreaLight(0x7251B0, 15, 12, 10); // 2 ตัวเลขด้านหลังเป็น ขนาดของ สี่เหลี่ยม
+        areaLight9.position.set(-27, 31, -20.2);
+        areaLight9.lookAt(6, 1, -20.2);
+        scene.add(areaLight9);
+
+        camera.position.set(40, 40, -40);
         camera.lookAt(0, 0, 0);
         const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        const initialCameraPosition = camera.position.clone();
+        const initialCameraTarget = controls.target.clone();
+        document.getElementById('resetCameraButton').addEventListener('click', () => {
+            zoomStartTime = null;
+            camera.position.copy(initialCameraPosition);
+            controls.target.copy(initialCameraTarget);
+            controls.update();
+        });
 
-        const abmientLight = new THREE.AmbientLight(0x404040, 1); // soft white light
+        const abmientLight = new THREE.AmbientLight(0x404040, 0.5); // soft white light
         scene.add(abmientLight);
 
-        
+
         const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
         directionalLight.position.set(10, 10, 10);
         directionalLight.castShadow = true;
         scene.add(directionalLight);
-
-
-        
-        /*const exrSkyboxUrl = 'https://dl.polyhaven.org/file/ph-assets/HDRIs/exr/1k/venice_sunset_1k.exr';
-        const pmremGenerator = new THREE.PMREMGenerator(renderer);
-        pmremGenerator.compileEquirectangularShader();
-
-        new THREE.EXRLoader()
-            .setDataType(THREE.UnsignedByteType)
-            .load(exrSkyboxUrl, (texture) => {
-                const skybox = pmremGenerator.fromEquirectangular(texture).texture;
-                scene.background = skybox;
-                scene.environment = skybox;
-
-                texture.dispose();
-                pmremGenerator.dispose();
-            }, undefined, (error) => {
-                console.error('Unable to load EXR skybox:', error);
-            });
-        */
-
-
-
 
         //load glb และใช้ pbr material
         const clock = new THREE.Clock();
@@ -92,32 +392,65 @@
                 if (child.isMesh) {
                     child.castShadow = true;
                     child.receiveShadow = true;
+
+                    const material = child.material;
+                    const objectName = `${child.name} ${material?.name || ''}`.toLowerCase();
+                    const isGlass = /g2|g2.002|g2.003|g2.004|g2.005|g2.006|g2.007|g2.008|g2.009/.test(objectName);
+
+                    if (isGlass && material) {
+
+                        material.transparent = true;
+
+                        // ทำให้แก้วมองเห็นชัดขึ้น
+                        material.opacity = 0.65;
+
+                        // สำคัญมาก
+                        material.depthWrite = true;
+
+                        material.side = THREE.DoubleSide;
+
+                        material.roughness = 0.15;
+                        material.metalness = 0;
+
+                        // ให้แก้วมีสีขาวนิด ๆ จะเห็นขอบแก้วง่ายขึ้น
+                        material.color.set(0xffffff);
+
+                        if ('transmission' in material) {
+                            material.transmission = 0.4;
+                            material.thickness = 0.1;
+                            material.ior = 1.5;
+                        }
+
+                        material.needsUpdate = true;
+                    }
                 }
             });
             model.position.set(0, 0, 1);
             model.scale.set(3, 3, 3);
             scene.add(model);
             mixer = new THREE.AnimationMixer(model);
-            const clip = THREE.AnimationClip.findByName(gltf.animations, 'door_open.001');
+            const clip = THREE.AnimationClip.findByName(gltf.animations, 'door');
             if (clip) mixer.clipAction(clip).play();
         });
-      
-
-
-
-        
         function animate(t) {
             const delta = clock.getDelta();
             if (mixer) mixer.update(delta);
-            
+
+            uniforms.uTime.value = t * 0.001;
+            sphereUniforms.uTime.value = t * 0.005;
+            if (zoomStartTime !== null) {
+                const progress = Math.min((performance.now() - zoomStartTime) / 700, 1);
+                const easedProgress = progress * progress * (3 - 2 * progress);
+                camera.position.lerpVectors(zoomStartPosition, zoomEndPosition, easedProgress);
+                controls.target.lerpVectors(zoomStartTarget, zoomEndTarget, easedProgress);
+                if (progress === 1) zoomStartTime = null;
+            }
+            controls.update();
             renderer.render(scene, camera);
             requestAnimationFrame(animate);
         }
-        animate(0);
+        requestAnimationFrame(animate);
 
-        window.addEventListener('keydown', (event) => {
-
-        });
 
     </script>
 </body>
