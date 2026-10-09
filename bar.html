@@ -213,9 +213,133 @@
         mesh2.position.set(-11.1, 15.7, -14.65);
         mesh2.scale.setScalar(0.7); // ใหญ่ขึ้น 2 เท่า
 
+        const plantUniforms = {
+            uTime: { value: 0.0 },
+            uLightDir: { value: new THREE.Vector3(0.4, 1.0, 0.8).normalize() }
+        };
+        const plantWorldLightDir = plantUniforms.uLightDir.value.clone();
+        const plantLightViewQuaternion = new THREE.Quaternion();
+        const plantVertexShader = `
+            uniform float uTime;
+            uniform float uWindStrength;
+            varying vec3 vNormal;
+            varying vec3 vViewPosition;
+
+            void main() {
+                vec3 pos = position;
+                pos.x += sin(uTime * 1.5 + position.y * 2.0) *
+                    uWindStrength * max(position.y, 0.0);
+                vec4 viewPosition = modelViewMatrix * vec4(pos, 1.0);
+                vNormal = normalize(normalMatrix * normal);
+                vViewPosition = -viewPosition.xyz;
+                gl_Position = projectionMatrix * viewPosition;
+            }
+        `;
+        const plantFragmentShader = `
+            precision mediump float;
+            uniform vec3 uBaseColor;
+            uniform vec3 uLightDir;
+            varying vec3 vNormal;
+            varying vec3 vViewPosition;
+
+            void main() {
+                vec3 N = normalize(vNormal);
+                vec3 L = normalize(uLightDir);
+                vec3 V = normalize(vViewPosition);
+                float diffuse = max(dot(N, L), 0.0);
+                float shade = diffuse > 0.72 ? 1.0 :
+                    (diffuse > 0.38 ? 0.72 : 0.46);
+                float rim = pow(1.0 - max(dot(N, V), 0.0), 3.0);
+                vec3 color = uBaseColor * shade;
+                color = mix(color, uBaseColor * 0.28, rim * 0.45);
+                gl_FragColor = vec4(color, 1.0);
+            }
+        `;
+        function makePlantMaterial(color, windStrength) {
+            return new THREE.ShaderMaterial({
+                vertexShader: plantVertexShader,
+                fragmentShader: plantFragmentShader,
+                uniforms: {
+                    uTime: plantUniforms.uTime,
+                    uLightDir: plantUniforms.uLightDir,
+                    uBaseColor: { value: new THREE.Color(color) },
+                    uWindStrength: { value: windStrength }
+                }
+            });
+        }
+
+        const plant = new THREE.Group();
+        plant.name = 'Toon Potted Plant';
+        const potMaterial = makePlantMaterial(0xc66e4d, 0.0);
+        const leafMaterials = [
+            makePlantMaterial(0x45935c, 0.1),
+            makePlantMaterial(0x62ad68, 0.1),
+            makePlantMaterial(0x317849, 0.1)
+        ];
+        const potProfile = [
+            new THREE.Vector2(0.38, 0.04),
+            new THREE.Vector2(0.43, 0.12),
+            new THREE.Vector2(0.58, 0.83),
+            new THREE.Vector2(0.64, 0.88),
+            new THREE.Vector2(0.63, 0.98),
+            new THREE.Vector2(0.53, 0.98),
+            new THREE.Vector2(0.51, 0.88),
+            new THREE.Vector2(0.37, 0.18)
+        ];
+        const pot = new THREE.Mesh(
+            new THREE.LatheBufferGeometry(potProfile, 32),
+            potMaterial
+        );
+        pot.castShadow = true;
+        pot.receiveShadow = true;
+        plant.add(pot);
+
+        const soil = new THREE.Mesh(
+            new THREE.CircleBufferGeometry(0.51, 32),
+            makePlantMaterial(0x493329, 0.0)
+        );
+        soil.rotation.x = -Math.PI / 2;
+        soil.position.y = 0.87;
+        soil.receiveShadow = true;
+        plant.add(soil);
+
+        const stem = new THREE.Mesh(
+            new THREE.CylinderBufferGeometry(0.055, 0.09, 1.12, 10),
+            makePlantMaterial(0x568044, 0.025)
+        );
+        stem.position.y = 1.45;
+        stem.castShadow = true;
+        plant.add(stem);
+
+        const leafGeometry = new THREE.SphereBufferGeometry(1, 18, 12);
+        const leaves = [
+            { x: -0.42, y: 1.57, z: 0.02, rz: -0.72, ry: 0.2, material: 0 },
+            { x: 0.42, y: 1.7, z: 0.02, rz: 0.72, ry: -0.2, material: 1 },
+            { x: -0.36, y: 2.0, z: 0.0, rz: -0.78, ry: -0.5, material: 1 },
+            { x: 0.36, y: 2.12, z: 0.0, rz: 0.78, ry: 0.5, material: 2 },
+            { x: -0.18, y: 2.38, z: 0.0, rz: -0.28, ry: 0.4, material: 0 },
+            { x: 0.18, y: 2.43, z: 0.0, rz: 0.28, ry: -0.4, material: 1 },
+            { x: 0.0, y: 2.72, z: 0.0, rz: 0.0, ry: 0.0, material: 2 }
+        ];
+        leaves.forEach((leaf, index) => {
+            const mesh = new THREE.Mesh(leafGeometry, leafMaterials[leaf.material]);
+            mesh.position.set(leaf.x, leaf.y, leaf.z);
+            mesh.rotation.set(0, leaf.ry, leaf.rz);
+            mesh.scale.set(index === 6 ? 0.2 : 0.19, index === 6 ? 0.45 : 0.58, 0.13);
+            mesh.castShadow = true;
+            plant.add(mesh);
+        });
+
+        // ย้ายต้นไม้ได้จากตำแหน่งของกลุ่มนี้
+        plant.position.set(-8, 0, 26);
+        plant.rotation.y = Math.PI / 2;
+        scene.add(plant);
+
         const mesh = new THREE.Mesh(geometry, material);
         //scene.add(mesh);
         mesh.position.set(1, 0, 0);
+
+        plant.scale.setScalar(4); // ขยายเป็น 4 เท่า
 
         const outlineMesh = new THREE.Mesh(geometry, outlineMaterial);
         //scene.add(outlineMesh);
@@ -438,6 +562,7 @@
 
             uniforms.uTime.value = t * 0.001;
             sphereUniforms.uTime.value = t * 0.005;
+            plantUniforms.uTime.value = t * 0.001;
             if (zoomStartTime !== null) {
                 const progress = Math.min((performance.now() - zoomStartTime) / 700, 1);
                 const easedProgress = progress * progress * (3 - 2 * progress);
@@ -446,6 +571,10 @@
                 if (progress === 1) zoomStartTime = null;
             }
             controls.update();
+            plantLightViewQuaternion.copy(camera.quaternion).invert();
+            plantUniforms.uLightDir.value
+                .copy(plantWorldLightDir)
+                .applyQuaternion(plantLightViewQuaternion);
             renderer.render(scene, camera);
             requestAnimationFrame(animate);
         }
